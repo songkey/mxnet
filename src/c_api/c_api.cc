@@ -34,6 +34,7 @@
 #include <mxnet/c_api.h>
 #include <mxnet/kvstore.h>
 #include <mxnet/rtc.h>
+#include <mxnet/storage.h>
 #include <vector>
 #include <sstream>
 #include <string>
@@ -1226,5 +1227,27 @@ int MXRtcCudaKernelCall(CudaKernelHandle handle, int dev_id, void** args,
 #else
   LOG(FATAL) << "Compile with USE_CUDA=1 to use GPU.";
 #endif
+  API_END();
+}
+
+
+int MXNDArrayCopyToSharedMem(NDArrayHandle handle, const char** filename) {
+  MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
+  API_BEGIN();
+  NDArray* arr = static_cast<NDArray*>(handle);
+  size_t size = arr->shape().Size() * mshadow::mshadow_sizeof(arr->dtype());
+  auto mem = Storage::Get()->SharedAlloc(size);
+  ret->ret_str = std::string(mem.filename);
+  *filename = ret->ret_str.c_str();
+  arr->SyncCopyToCPU(mem.dptr, arr->shape().Size());
+  Storage::Get()->SharedFree(mem, false);
+  API_END();
+}
+
+int MXNDArrayCreateFromSharedMem(const char* filename, const mx_uint *shape,
+                                 mx_uint ndim, int dtype, NDArrayHandle *out) {
+  API_BEGIN();
+  TShape ndshape(shape, shape + ndim);
+  *out = new NDArray(filename, ndshape, dtype);
   API_END();
 }

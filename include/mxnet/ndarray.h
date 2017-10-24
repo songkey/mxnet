@@ -151,6 +151,14 @@ class NDArray {
     Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
+  /*! \brief create ndarray from shared memory */
+  NDArray(const char* filename, const TShape& shape, int dtype)
+      : ptr_(std::make_shared<Chunk>(filename, shape, dtype)), shape_(shape),
+        dtype_(dtype), storage_type_(kDefaultStorage), entry_({nullptr, 0, 0}) {
+#if MKL_EXPERIMENTAL == 1
+    Mkl_mem_ = std::make_shared<MKLMemHolder>();
+#endif
+  }
 
   /*!
    * \brief constructing a static NDArray of non-default storage that shares data with TBlob
@@ -663,6 +671,15 @@ class NDArray {
       shandle.dptr = data.dptr_;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
       storage_shape = data.shape_;
+    }
+
+    Chunk(const char* filename, const TShape& shape, int dtype)
+        : static_data(false), delay_alloc(false) {
+      var = Engine::Get()->NewVariable();
+      ctx = Context::CPU(0);
+      size_t size = shape.Size() * mshadow::mshadow_sizeof(dtype);
+      shandle = Storage::Get()->SharedRetrieve(filename, size);
+      storage_shape = shape;
     }
     // Constructor for a non-default storage chunk
     Chunk(NDArrayStorageType storage_type_, const TShape &storage_shape_, Context ctx_,

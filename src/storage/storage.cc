@@ -22,6 +22,11 @@
 #include <mxnet/storage.h>
 #include <mshadow/tensor.h>
 #include <dmlc/logging.h>
+#include <sys/mman.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <array>
 #include "./storage_manager.h"
 #include "./naive_storage_manager.h"
@@ -39,6 +44,9 @@ class StorageImpl : public Storage {
   Handle Alloc(size_t size, Context ctx) override;
   void Free(Handle handle) override;
   void DirectFree(Handle handle) override;
+  Handle SharedAlloc(size_t size) override;
+  Handle SharedRetrieve(const char* filename, size_t size) override;
+  void SharedFree(Handle handle, bool unlink = true) override;
   StorageImpl() {}
   virtual ~StorageImpl() = default;
 
@@ -123,7 +131,62 @@ Storage::Handle StorageImpl::Alloc(size_t size, Context ctx) {
   return hd;
 }
 
+Storage::Handle StorageImpl::SharedAlloc(size_t size) {
+  const int MAX_FILENAME = 24;
+  Handle hd;
+  hd.ctx = Context::CPU(0);
+  hd.size = size;
+
+  char* filename = new char[MAX_FILENAME];
+  int fid;
+  for(int i = 0; i < 10; ++i) {
+    snprintf(filename, MAX_FILENAME, "/mx_%08x_%08x", getpid(), std::rand());
+    if ((fid = shm_open(filename, O_EXCL|O_CREAT|O_RDWR, 0666)) != -1) break;
+    LOG(INFO) << filename;
+  }
+  if (fid == -1) {
+    LOG(FATAL)
+      << "Unabled to create shared memory."
+      << ". shm_open failed with error " << strerror(errno);
+  }
+  ftruncate(fid, size);
+  hd.dptr = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fid, 0);
+  hd.filename = filename;
+
+  return hd;
+}
+
+Storage::Handle StorageImpl::SharedRetrieve(const char* filename, size_t size) {
+  Handle hd;
+  hd.ctx = Context::CPU(0);
+  hd.size = size;
+  hd.filename = new char[strlen(filename)+1];
+  strcpy(hd.filename, filename);
+  int fid = shm_open(hd.filename, O_RDWR, 0666);
+  CHECK_NE(fid, -1)
+    << "Failed to open shared memory " << filename
+    << ". shm_open failed with error " << strerror(errno);
+  hd.dptr = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fid, 0);
+
+  return hd;
+}
+
+void StorageImpl::SharedFree(Storage::Handle handle, bool unlink) {
+  CHECK(handle.filename != nullptr);
+  CHECK_EQ(munmap(handle.dptr, handle.size), 0)
+    << "Failed to unmap shared memory " << handle.filename;
+  if (unlink) {
+    CHECK_EQ(shm_unlink(handle.filename), 0)
+      << "Failed to unlink shared memory " << handle.filename;
+  }
+  delete handle.filename;
+}
+
 void StorageImpl::Free(Storage::Handle handle) {
+  if (handle.filename != nullptr) {
+    SharedFree(handle);
+    return;
+  }
   const Context &ctx = handle.ctx;
   auto&& device = storage_managers_.at(ctx.dev_type);
   std::shared_ptr<storage::StorageManager> manager = device.Get(

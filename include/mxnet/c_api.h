@@ -1995,6 +1995,12 @@ MXNET_DLL int MXRtcCudaKernelCall(CudaKernelHandle handle, int dev_id, void** ar
                                   mx_uint block_dim_y, mx_uint block_dim_z,
                                   mx_uint shared_mem);
 
+MXNET_DLL int MXNDArrayCopyToSharedMem(NDArrayHandle handle, const char** filename);
+
+MXNET_DLL int MXNDArrayCreateFromSharedMem(const char* filename, const mx_uint *shape,
+                                           mx_uint ndim, int dtype, NDArrayHandle *out);
+
+
 #ifdef __cplusplus
 }
 #endif  // __cplusplus

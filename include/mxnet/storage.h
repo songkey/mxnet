@@ -50,6 +50,8 @@ class Storage {
      * \brief Context information about device and ID.
      */
     Context ctx;
+    /*! \brief descriptor for IPC shared memory */
+    char* filename{nullptr};
   };
   /*!
    * \brief Allocate a new contiguous memory for a given size.
@@ -73,6 +75,25 @@ class Storage {
    * \param handle Handle struct.
    */
   virtual void DirectFree(Handle handle) = 0;
+  /*!
+   * \brief Allocate a new shared memory for a given size.
+   * \param size Total size of memory in bytes.
+   * \return Handle struct.
+   */
+  virtual Handle SharedAlloc(size_t size) = 0;
+  /*!
+   * \brief Retrieve a previously allocated shared memory of a given size
+   * \param filename name of the shared memory descriptor.
+   * \param size Total size of memory in bytes.
+   * \return Handle struct.
+   */
+  virtual Handle SharedRetrieve(const char* filename, size_t size) = 0;
+  /*!
+   * \brief Free shared memory storage.
+   * \param handle Handle struect.
+   * \param unlink whether to also unlink the shared memory.
+   */
+  virtual void SharedFree(Handle handle, bool unlink = true) = 0;
   /*!
    * \brief Destructor.
    */
