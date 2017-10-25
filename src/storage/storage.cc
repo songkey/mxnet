@@ -23,9 +23,8 @@
 #include <mshadow/tensor.h>
 #include <dmlc/logging.h>
 #if defined(_MSC_VER)
+#include <Windows.h>
 #include <process.h>
-#include <winnt.h>
-#include <winbase.h>
 #else
 #include <sys/mman.h>
 #include <sys/fcntl.h>
@@ -150,7 +149,7 @@ Storage::Handle StorageImpl::SharedAlloc(size_t size) {
   unsigned long error;
   for (int i = 0; i < 10; ++i) {
     snprintf(filename, MAX_FILENAME, "/mx_%08x_%08x", _getpid(), std::rand());
-    map_handle = CreateFileMapping(reinterpret_cast<HANDLE>(0xFFFFFFFF),
+    map_handle = CreateFileMapping(INVALID_HANDLE_VALUE,
       NULL, PAGE_READWRITE, 0, size, filename);
     if((error=GetLastError())== ERROR_SUCCESS)
     {
@@ -197,7 +196,7 @@ Storage::Handle StorageImpl::SharedRetrieve(const char* filename, size_t size) {
 #if defined(_MSC_VER)
   HANDLE map_handle = OpenFileMapping(FILE_MAP_READ | FILE_MAP_WRITE,
     FALSE, hd.filename);
-  CHECK_EQ(map_handle, nullptr)
+  CHECK_EQ(map_handle, (HANDLE)0)
     << "Failed to open shared memory " << filename
     << ". OpenFileMapping failed with error " << strerror(errno);
   hd.map_handle = map_handle;
