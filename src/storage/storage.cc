@@ -146,7 +146,7 @@ Storage::Handle StorageImpl::SharedAlloc(size_t size) {
 
   char* filename = new char[MAX_FILENAME];
 #if defined(_MSC_VER)
-  HANDLE map_handle;
+  HANDLE map_handle = nullptr;
   unsigned long error;
   for (int i = 0; i < 10; ++i) {
     snprintf(filename, MAX_FILENAME, "/mx_%08x_%08x", _getpid(), std::rand());
@@ -163,6 +163,7 @@ Storage::Handle StorageImpl::SharedAlloc(size_t size) {
       << "Unabled to create shared memory."
       << ". CreateFileMapping failed with error " << strerror(errno);
   }
+  hd.map_handle = map_handle;
   hd.dptr = MapViewOfFile(map_handle, FILE_MAP_READ | FILE_MAP_WRITE,0,0,0);
   hd.filename = filename;
 #else
@@ -199,6 +200,7 @@ Storage::Handle StorageImpl::SharedRetrieve(const char* filename, size_t size) {
   CHECK_EQ(map_handle, nullptr)
     << "Failed to open shared memory " << filename
     << ". OpenFileMapping failed with error " << strerror(errno);
+  hd.map_handle = map_handle;
   hd.dptr = MapViewOfFile(map_handle, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
 #else
   int fid = shm_open(hd.filename, O_RDWR, 0666);
@@ -215,14 +217,8 @@ void StorageImpl::SharedFree(Storage::Handle handle, bool unlink) {
 #if defined(_MSC_VER)
   CHECK_EQ(UnmapViewOfFile(handle.dptr), 0)
     << "Failed to unmap shared memory " << handle.filename;
-  if (unlink) {
-    HANDLE map_handle = CreateFileMapping(reinterpret_cast<HANDLE>(0xFFFFFFFF),
-      NULL, PAGE_READWRITE, 0, handle.size, handle.filename);
-    CHECK_EQ(map_handle, 0)
-      << "Failed to get shared memory " << handle.filename;
-    CHECK_EQ(CloseHandle(map_handle), 0)
-      << "Failed to CloseHandle shared memory " << handle.filename;
-  }
+  CHECK_EQ(CloseHandle(handle.map_handle), 0)
+    << "Failed to CloseHandle shared memory " << handle.filename;
 #else
   CHECK_EQ(munmap(handle.dptr, handle.size), 0)
     << "Failed to unmap shared memory " << handle.filename;

@@ -52,6 +52,12 @@ class Storage {
     Context ctx;
     /*! \brief descriptor for IPC shared memory */
     char* filename{nullptr};
+#if defined(_MSC_VER)
+    /*!
+    * \brief windows memory map handle
+    */
+    void* map_handle{ nullptr };
+#endif
   };
   /*!
    * \brief Allocate a new contiguous memory for a given size.
